@@ -317,44 +317,56 @@ public class SourceStacks
 	static class SourceStackResolutions
 	{
 		final int[][] resolutions;
-
 		final double[][] scales;
-
 		final AffineTransform3D[] levelts;
 
-		SourceStackResolutions( final Source< ? > source, final int timepoint )
+		SourceStackResolutions(final Source<?> source, final int timepoint)
 		{
 			final int numLevels = source.getNumMipmapLevels();
 
-			resolutions = new int[ numLevels ][];
-			scales = new double[ numLevels ][];
-			levelts = new AffineTransform3D[ numLevels ];
+			resolutions = new int[numLevels][];
+			scales = new double[numLevels][];
+			levelts = new AffineTransform3D[numLevels];
 
-			resolutions[ 0 ] = new int[] { 1, 1, 1 };
-			scales[ 0 ] = new double[] { 1, 1, 1 };
-			levelts[ 0 ] = new AffineTransform3D();
+			resolutions[0] = new int[]{1, 1, 1};
+			scales[0] = new double[]{1, 1, 1};
+			levelts[0] = new AffineTransform3D();
 
 			final AffineTransform3D sourceTransform = new AffineTransform3D();
-			source.getSourceTransform( timepoint, 0, sourceTransform );
-			for ( int level = 1; level < numLevels; level++ )
+			source.getSourceTransform(timepoint, 0, sourceTransform);
+
+			for (int level = 1; level < numLevels; level++)
 			{
-				final int[] resolution = resolutions[ level ] = new int[ 3 ];
-				final double[] scale = scales[ level ] = new double[ 3 ];
-				final AffineTransform3D levelt = levelts[ level ] = new AffineTransform3D();
+				final int[] resolution = resolutions[level] = new int[3];
+				final double[] scale = scales[level] = new double[3];
+				final AffineTransform3D levelt = levelts[level] = new AffineTransform3D();
 
 				final AffineTransform3D levelTransform = new AffineTransform3D();
-				source.getSourceTransform( timepoint, level, levelTransform );
-				levelTransform.preConcatenate( sourceTransform.inverse() );
-				for ( int d = 0; d < 3; ++d )
+				source.getSourceTransform(timepoint, level, levelTransform);
+				levelTransform.preConcatenate(sourceTransform.inverse());
+
+				boolean singular = false;
+				for (int d = 0; d < 3; ++d)
 				{
-					resolution[ d ] = ( int ) Math.round( levelTransform.get( d, d ) );
-					scale[ d ] = 1.0 / resolution[ d ];
-					levelt.set( resolution[ d ], d, d );
-					levelt.set( 0.5 * ( resolution[ d ] - 1 ), d, 3 );
+					double scaleFactor = levelTransform.get(d, d);
+					if (scaleFactor == 0.0)
+					{
+						singular = true;
+						break;
+					}
+
+					resolution[d] = (int) Math.round(1.0 / scaleFactor);
+					scale[d] = scaleFactor;
+					levelt.set(scale[d], d, d);
+					levelt.set(0.5 * (resolution[d] - 1), d, 3);
 				}
 
-				// TODO: sanity check: levelt * levelTransform^-1 ~= identity
+				if (singular)
+				{
+					throw new RuntimeException("Matrix is singular, level: " + level);
+				}
 			}
 		}
 	}
+
 }
