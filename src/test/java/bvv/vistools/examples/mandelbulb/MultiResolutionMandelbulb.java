@@ -23,13 +23,30 @@ import java.util.List;
 public class MultiResolutionMandelbulb {
 
     public static void main(String[] args) throws Exception {
-        // Define resolutions and corresponding grid sizes
-        final double[][] resolutions = {
-                {1.0, 1.0, 1.0}, // full resolution
-                {2.0, 2.0, 2.0}, // half resolution
-                {4.0, 4.0, 4.0}  // quarter resolution
-        };
-        final int[] gridSizes = {256, 128, 64};
+        // Define max scale level
+        int maxScale = 18; // Example maxScale value
+
+        // Desired grid size at the finest resolution level
+        final int desiredFinestGridSize = 2; // Define as per your requirement
+
+        // Compute the base grid size
+        final int baseGridSize = desiredFinestGridSize * (int) Math.pow(2, maxScale - 1);
+
+        // Generate resolutions and corresponding grid sizes
+        final double[][] resolutions = new double[maxScale][3];
+        final int[] gridSizes = new int[maxScale];
+        for (int i = 0; i < maxScale; i++) {
+            double scaleFactor = Math.pow(2, i);
+            resolutions[i][0] = scaleFactor;
+            resolutions[i][1] = scaleFactor;
+            resolutions[i][2] = scaleFactor;
+            gridSizes[i] = baseGridSize / (int) scaleFactor;
+            System.out.println("Grid size for " + i + " grid size: " + gridSizes[i]);
+        }
+
+        MandelbulbCacheArrayLoader.gridSizes = gridSizes;
+        MandelbulbCacheArrayLoader.baseGridSize = baseGridSize;
+        MandelbulbCacheArrayLoader.desiredFinestGridSize = desiredFinestGridSize;
 
         // Mandelbulb parameters
         final int maxIter = 255;
@@ -73,8 +90,8 @@ public class MultiResolutionMandelbulb {
         // Display the SpimData using BVV
         List<BvvStackSource<?>> sources = BvvFunctions.show(spimData, BvvOptions.options().frameTitle("Multiresolution Mandelbulb"));
 
-        for( int k = 0; k < sources.size(); k++) {
-            sources.get( k ).setDisplayRange( 0, 60000 );
+        for (int k = 0; k < sources.size(); k++) {
+            sources.get(k).setDisplayRange(0, 60000);
         }
 
         // Center the view on the data

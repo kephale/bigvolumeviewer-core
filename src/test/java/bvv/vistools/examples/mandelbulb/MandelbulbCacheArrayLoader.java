@@ -12,6 +12,11 @@ public class MandelbulbCacheArrayLoader implements CacheArrayLoader<VolatileShor
     private final int maxIter;
     private final int order;
 
+    // Static variables for grid sizes, base grid size, and desired finest grid size
+    public static int[] gridSizes;
+    public static int baseGridSize;
+    public static int desiredFinestGridSize;
+
     public MandelbulbCacheArrayLoader(int maxIter, int order)
     {
         this.maxIter = maxIter;
@@ -19,13 +24,13 @@ public class MandelbulbCacheArrayLoader implements CacheArrayLoader<VolatileShor
     }
 
     @Override
-    public VolatileShortArray loadArray(final int timepoint, final int setup, final int level, final int[] dimensions, final long[] min) throws InterruptedException
+    public VolatileShortArray loadArray(final int timepoint, final int setup, final int level, final int[] cellDims, final long[] cellMin) throws InterruptedException
     {
         // Generate Mandelbulb for the specific cell region
-        final RandomAccessibleInterval<UnsignedShortType> img = generateMandelbulbForCell(dimensions, min, maxIter, order);
+        final RandomAccessibleInterval<UnsignedShortType> img = generateMandelbulbForCell(cellDims, cellMin, level, maxIter, order);
 
         // Create a VolatileShortArray to hold the generated data
-        final VolatileShortArray shortArray = new VolatileShortArray(dimensions[0] * dimensions[1] * dimensions[2], true);
+        final VolatileShortArray shortArray = new VolatileShortArray(cellDims[0] * cellDims[1] * cellDims[2], true);
 
         // Extract the data into the short array
         final short[] data = shortArray.getCurrentStorageArray();
@@ -40,20 +45,27 @@ public class MandelbulbCacheArrayLoader implements CacheArrayLoader<VolatileShor
         return 2; // Each element is 2 bytes (16 bits)
     }
 
-    public static RandomAccessibleInterval<UnsignedShortType> generateMandelbulbForCell(int[] dimensions, long[] min, int maxIter, int order)
+    public static RandomAccessibleInterval<UnsignedShortType> generateMandelbulbForCell(int[] cellDims, long[] cellMin, int level, int maxIter, int order)
     {
-        final RandomAccessibleInterval<UnsignedShortType> img = ArrayImgs.unsignedShorts(new long[]{dimensions[0], dimensions[1], dimensions[2]});
+        final RandomAccessibleInterval<UnsignedShortType> img = ArrayImgs.unsignedShorts(new long[]{cellDims[0], cellDims[1], cellDims[2]});
 
-        for (long z = 0; z < dimensions[2]; z++)
+        // Calculate the scaling factor based on the desired finest grid size
+        double scale = (double) desiredFinestGridSize / gridSizes[level];
+
+        // Calculate center offset for normalization
+        double centerOffset = desiredFinestGridSize / 2.0;
+
+        for (long z = 0; z < cellDims[2]; z++)
         {
-            for (long y = 0; y < dimensions[1]; y++)
+            for (long y = 0; y < cellDims[1]; y++)
             {
-                for (long x = 0; x < dimensions[0]; x++)
+                for (long x = 0; x < cellDims[0]; x++)
                 {
+                    // Normalize and center coordinates to range from -1 to 1
                     double[] coordinates = new double[]{
-                            x + min[0],
-                            y + min[1],
-                            z + min[2]
+                            ((x + cellMin[0]) * scale - centerOffset) / centerOffset,
+                            ((y + cellMin[1]) * scale - centerOffset) / centerOffset,
+                            ((z + cellMin[2]) * scale - centerOffset) / centerOffset
                     };
                     int iterations = mandelbulbIter(coordinates, maxIter, order);
                     img.getAt(x, y, z).set((int) (iterations * 65535.0 / maxIter)); // Scale to 16-bit range
@@ -68,10 +80,6 @@ public class MandelbulbCacheArrayLoader implements CacheArrayLoader<VolatileShor
         double x = coord[0];
         double y = coord[1];
         double z = coord[2];
-        double cx = (x / 128.0 - 1.0) * 2;
-        double cy = (y / 128.0 - 1.0) * 2;
-        double cz = (z / 128.0 - 1.0) * 2;
-
         double xn = 0, yn = 0, zn = 0;
         int iter = 0;
         while (iter < maxIter && xn * xn + yn * yn + zn * zn < 4)
@@ -84,9 +92,9 @@ public class MandelbulbCacheArrayLoader implements CacheArrayLoader<VolatileShor
             double newTheta = theta * order;
             double newPhi = phi * order;
 
-            xn = newR * Math.sin(newTheta) * Math.cos(newPhi) + cx;
-            yn = newR * Math.sin(newTheta) * Math.sin(newPhi) + cy;
-            zn = newR * Math.cos(newTheta) + cz;
+            xn = newR * Math.sin(newTheta) * Math.cos(newPhi) + x;
+            yn = newR * Math.sin(newTheta) * Math.sin(newPhi) + y;
+            zn = newR * Math.cos(newTheta) + z;
 
             iter++;
         }
